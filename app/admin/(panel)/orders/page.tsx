@@ -6,37 +6,6 @@ import { adminJson } from "@/components/admin/adminFetch";
 import { ScopeUserBar } from "@/components/admin/ScopeUserBar";
 import { computeOrderPnl } from "@/lib/admin-orders-pnl";
 
-type LiveTrade = {
-  _id: string;
-  clientId?: string;
-  userName?: string;
-  symbol: string;
-  exchange: string;
-  side: "BUY" | "SELL";
-  qty: number;
-  price: number;
-  totalValue: number;
-  productType: string;
-  optionType?: string;
-  strikePrice?: number;
-  expiry?: string;
-  pnl: number;
-  status: string;
-  createdAt: string;
-};
-
-const emptyTrade = {
-  userId: "",
-  symbol: "",
-  exchange: "NSE",
-  side: "BUY" as "BUY" | "SELL",
-  qty: 1,
-  productType: "CNC",
-  optionType: "",
-  strikePrice: "",
-  expiry: "",
-};
-
 type OrderSegment = { key: string; label: string };
 
 type OrderRow = {
@@ -118,23 +87,6 @@ const inp =
   "min-w-[4rem] rounded border border-slate-200 bg-white px-1.5 py-1 text-xs text-slate-900 outline-none focus:border-emerald-500";
 const inpNum = `${inp} text-right`;
 
-function expiryDateToAngel(dateStr: string): string {
-  if (!dateStr) return "";
-  const [year, month, day] = dateStr.split("-");
-  const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-  const idx = parseInt(month, 10) - 1;
-  if (idx < 0 || idx > 11) return "";
-  return `${day.padStart(2, "0")}${months[idx]}${year}`;
-}
-
-function normalizeExch(exchange: string): string {
-  const map: Record<string, string> = {
-    NSEFO: "NFO", BSEFO: "BFO", NSE: "NSE", BSE: "BSE",
-    NFO: "NFO", BFO: "BFO", MCX: "MCX",
-  };
-  return map[exchange?.toUpperCase()] ?? exchange?.toUpperCase() ?? "NSE";
-}
-
 export default function AdminOrdersPage() {
   const searchParams = useSearchParams();
   const initialScope = searchParams.get("scopeUserId") || "";
@@ -144,20 +96,6 @@ export default function AdminOrdersPage() {
   const [rows, setRows] = useState<OrderRow[]>([]);
   const [source, setSource] = useState("");
   const [saving, setSaving] = useState(false);
-  const [placingRowIdx, setPlacingRowIdx] = useState<number | null>(null);
-
-  // Live trades (real MongoDB trades)
-  const [liveTrades, setLiveTrades] = useState<LiveTrade[]>([]);
-  const [liveTradesLoading, setLiveTradesLoading] = useState(false);
-  const [liveTradesErr, setLiveTradesErr] = useState<string | null>(null);
-  const [tradeForm, setTradeForm] = useState({ ...emptyTrade });
-  const [tradePlacing, setTradePlacing] = useState(false);
-  const [tradeMsg, setTradeMsg] = useState<string | null>(null);
-  const [tradeErr, setTradeErr] = useState<string | null>(null);
-  // Trade CRUD state
-  const [editingTrades, setEditingTrades] = useState<Record<string, LiveTrade>>({});
-  const [savingTradeId, setSavingTradeId] = useState<string | null>(null);
-  const [deletingTradeId, setDeletingTradeId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [showOptionType, setShowOptionType] = useState(true);
@@ -178,8 +116,12 @@ export default function AdminOrdersPage() {
   }, []);
 
   const loadConfig = useCallback(async () => {
+    if (!scopeUserId.trim()) {
+      setRows([]);
+      setSegments(DEFAULT_SEGMENTS);
+      return;
+    }
     setErr(null);
-    const q = scopeUserId ? `?scopeUserId=${encodeURIComponent(scopeUserId)}` : "";
     try {
       const data = await adminJson<{
         config?: {
@@ -189,7 +131,7 @@ export default function AdminOrdersPage() {
           showSide?: boolean;
         };
         source?: string;
-      }>(`/api/admin/orders${q}`);
+      }>(`/api/admin/orders?scopeUserId=${encodeURIComponent(scopeUserId)}`);
       const cfg = data.config || {};
       setShowOptionType(cfg.showOptionType !== false);
       setShowSide(cfg.showSide !== false);
@@ -230,6 +172,10 @@ export default function AdminOrdersPage() {
   }, [loadConfig]);
 
   async function save() {
+    if (!scopeUserId.trim()) {
+      setErr("Select a user before saving. Each config is per-user only.");
+      return;
+    }
     setSaving(true);
     setMsg(null);
     setErr(null);
@@ -241,7 +187,7 @@ export default function AdminOrdersPage() {
       await adminJson("/api/admin/orders", {
         method: "POST",
         body: JSON.stringify({
-          scopeUserId: scopeUserId || null,
+          scopeUserId,
           config: {
             summary,
             segments,
@@ -251,7 +197,7 @@ export default function AdminOrdersPage() {
           },
         }),
       });
-      setMsg("Orders & positions saved.");
+      setMsg("Positions saved for this user.");
       await loadConfig();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Save failed");
@@ -261,15 +207,31 @@ export default function AdminOrdersPage() {
   }
 
   async function resetScope() {
-    if (!confirm("Reset orders config for this scope to defaults?")) return;
+    if (!scopeUserId.trim()) {
+      setErr("Select a user first.");
+      return;
+    }
+    if (!confirm("Clear all position rows for this user?")) return;
     setSaving(true);
     try {
-      const q = scopeUserId ? `?scopeUserId=${encodeURIComponent(scopeUserId)}` : "";
-      await adminJson(`/api/admin/orders${q}`, { method: "DELETE" });
+      await adminJson(`/api/admin/orders?scopeUserId=${encodeURIComponent(scopeUserId)}`, { method: "DELETE" });
       setMsg("Reset.");
       await loadConfig();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Reset failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function clearGlobalConfig() {
+    if (!confirm("Delete the global (shared) order config from the database? This removes trades that were saved without a specific user.")) return;
+    setSaving(true);
+    try {
+      await adminJson("/api/admin/orders", { method: "DELETE" });
+      setMsg("Global config cleared.");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Clear failed");
     } finally {
       setSaving(false);
     }
@@ -281,186 +243,11 @@ export default function AdminOrdersPage() {
     );
   }
 
-  const loadLiveTrades = useCallback(async () => {
-    const uid = scopeUserId || tradeForm.userId;
-    setLiveTradesLoading(true);
-    setLiveTradesErr(null);
-    try {
-      const q = uid ? `?userId=${encodeURIComponent(uid)}` : "";
-      const data = await adminJson<{ trades: LiveTrade[] }>(`/api/admin/trades${q}`);
-      setLiveTrades(data.trades || []);
-    } catch (e) {
-      setLiveTradesErr(e instanceof Error ? e.message : "Failed to load");
-    } finally {
-      setLiveTradesLoading(false);
-    }
-  }, [scopeUserId, tradeForm.userId]);
-
-  // Auto-load trades whenever the scoped user changes
-  useEffect(() => {
-    if (scopeUserId) void loadLiveTrades();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopeUserId]);
-
-  function startEditTrade(t: LiveTrade) {
-    setEditingTrades((prev) => ({ ...prev, [t._id]: { ...t } }));
-  }
-
-  function cancelEditTrade(id: string) {
-    setEditingTrades((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-  }
-
-  function updateEditTrade(id: string, field: keyof LiveTrade, value: string | number) {
-    setEditingTrades((prev) => {
-      const t = prev[id];
-      if (!t) return prev;
-      const next = { ...t, [field]: value } as LiveTrade;
-      if (field === "qty" || field === "price") {
-        next.totalValue = Number(next.qty) * Number(next.price);
-      }
-      return { ...prev, [id]: next };
-    });
-  }
-
-  async function saveEditTrade(id: string) {
-    const updates = editingTrades[id];
-    if (!updates) return;
-    setSavingTradeId(id);
-    try {
-      await adminJson(`/api/admin/trades/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify(updates),
-      });
-      setLiveTrades((prev) => prev.map((t) => (t._id === id ? { ...t, ...updates } : t)));
-      cancelEditTrade(id);
-      setMsg("Trade updated.");
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Update failed");
-    } finally {
-      setSavingTradeId(null);
-    }
-  }
-
-  async function deleteTrade(id: string) {
-    if (!confirm("Permanently delete this trade?")) return;
-    setDeletingTradeId(id);
-    try {
-      await adminJson(`/api/admin/trades/${id}`, { method: "DELETE" });
-      setLiveTrades((prev) => prev.filter((t) => t._id !== id));
-      setMsg("Trade deleted.");
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Delete failed");
-    } finally {
-      setDeletingTradeId(null);
-    }
-  }
-
-  async function placeLiveTrade() {
-    const uid = scopeUserId || tradeForm.userId;
-    if (!uid || !tradeForm.symbol || !tradeForm.exchange || !tradeForm.qty) {
-      setTradeErr("User, symbol, exchange and qty are required");
-      return;
-    }
-    setTradePlacing(true);
-    setTradeMsg(null);
-    setTradeErr(null);
-    try {
-      const result = await adminJson<{ message: string; newBalance: number }>(
-        "/api/admin/trades",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            userId: uid,
-            symbol: tradeForm.symbol.toUpperCase(),
-            exchange: tradeForm.exchange.toUpperCase(),
-            side: tradeForm.side,
-            qty: Number(tradeForm.qty),
-            productType: tradeForm.productType,
-            optionType: tradeForm.optionType || undefined,
-            strikePrice: tradeForm.strikePrice ? Number(tradeForm.strikePrice) : undefined,
-            expiry: tradeForm.expiry || undefined,
-          }),
-        },
-      );
-      setTradeMsg(`${result.message} · New balance: ₹${Number(result.newBalance).toLocaleString()}`);
-      void loadLiveTrades();
-    } catch (e) {
-      setTradeErr(e instanceof Error ? e.message : "Trade failed");
-    } finally {
-      setTradePlacing(false);
-    }
-  }
-
-  async function placeTradeFromRow(idx: number, side: "BUY" | "SELL") {
-    if (!scopeUserId) {
-      setErr("Select a user first before placing a trade.");
-      return;
-    }
-    const row = rows[idx];
-    if (!row.symbol) {
-      setErr("Row has no symbol.");
-      return;
-    }
-    setPlacingRowIdx(idx);
-    setMsg(null);
-    setErr(null);
-    try {
-      const exchange = normalizeExch(row.exchange || row.market || "NSE");
-      const expiry = expiryDateToAngel(row.expiryDate || "");
-      const rowPrice = row.orderPrice || row.avgPrice || row.ltp || 0;
-      const result = await adminJson<{ message: string; trade: { price: number; qty: number }; newBalance: number }>(
-        "/api/admin/trades",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            userId: scopeUserId,
-            symbol: row.symbol.toUpperCase(),
-            exchange,
-            side,
-            qty: Number(row.qty) || 1,
-            orderType: "LIMIT",
-            limitPrice: rowPrice,
-            productType: row.productType === "Delivery" ? "CNC" : row.productType === "Intraday" ? "MIS" : row.productType || "CNC",
-            optionType: row.optionType || undefined,
-            strikePrice: row.strikePrice ? Number(row.strikePrice) : undefined,
-            expiry: expiry || undefined,
-          }),
-        },
-      );
-      // Sync the row: update avgPrice with actual execution price
-      const updatedRows = rows.map((r, i) => {
-        if (i !== idx) return r;
-        return patchRow(r, {
-          avgPrice: result.trade.price,
-          side,
-          status: "OPEN",
-        });
-      });
-      setRows(updatedRows);
-      setMsg(`${result.message} · Balance: ₹${Number(result.newBalance).toLocaleString()}`);
-      // Auto-save so the updated avgPrice persists
-      const summary = { dayPnl: updatedRows.reduce((a, o) => a + computeOrderPnl(o), 0), totalPnl: updatedRows.reduce((a, o) => a + computeOrderPnl(o), 0) };
-      await adminJson("/api/admin/orders", {
-        method: "POST",
-        body: JSON.stringify({ scopeUserId, config: { summary, segments, orders: updatedRows, showOptionType, showSide } }),
-      });
-      void loadLiveTrades();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Trade failed");
-    } finally {
-      setPlacingRowIdx(null);
-    }
-  }
-
   return (
     <div className="mx-auto max-w-[100rem]">
       <h2 className="text-lg font-semibold text-slate-900">Orders &amp; positions</h2>
       <p className="mt-1 text-sm text-slate-600">
-        Select a user, click <strong>Load</strong>, then add rows and <strong>Save</strong>. Click <strong>Buy</strong> or <strong>Sell</strong> on any row to execute a live trade for that user.
+        Select a user, add rows, set segment to <strong>positions</strong>, fill in P&amp;L, then <strong>Save</strong>. Rows with segment&nbsp;<em>positions</em> appear in the user&apos;s Positions tab.
       </p>
       {source ? <p className="mt-2 text-xs text-slate-500">Source: {source}</p> : null}
       {msg ? (
@@ -481,12 +268,15 @@ export default function AdminOrdersPage() {
 
       {!scopeUserId.trim() && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <strong>Select a user above</strong> to load and edit their order rows. One user at a time.
+          <strong>Select a user above.</strong> Positions are per-user — no shared global trades.
         </div>
       )}
       {scopeUserId.trim() && (
         <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
-          <strong>Editing:</strong> {users.find(u => u._id === scopeUserId)?.fullName || users.find(u => u._id === scopeUserId)?.email || scopeUserId}
+          <strong>Editing:</strong>{" "}
+          {users.find((u) => u._id === scopeUserId)?.fullName ||
+            users.find((u) => u._id === scopeUserId)?.email ||
+            scopeUserId}
         </div>
       )}
 
@@ -501,7 +291,7 @@ export default function AdminOrdersPage() {
         <button
           type="button"
           onClick={() => void save()}
-          disabled={saving}
+          disabled={saving || !scopeUserId.trim()}
           className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
         >
           {saving ? "Saving…" : "Save"}
@@ -509,10 +299,19 @@ export default function AdminOrdersPage() {
         <button
           type="button"
           onClick={() => void resetScope()}
-          disabled={saving}
+          disabled={saving || !scopeUserId.trim()}
           className="rounded-lg border border-rose-200 px-4 py-2 text-sm text-rose-700 hover:bg-rose-50 disabled:opacity-50"
         >
-          Reset scope
+          Reset
+        </button>
+        <button
+          type="button"
+          onClick={() => void clearGlobalConfig()}
+          disabled={saving}
+          className="rounded-lg border border-orange-300 px-4 py-2 text-sm text-orange-700 hover:bg-orange-50 disabled:opacity-50"
+          title="Delete the shared global config saved without a user (removes global trades from the database)"
+        >
+          Clear global trades
         </button>
       </div>
 
@@ -589,7 +388,7 @@ export default function AdminOrdersPage() {
       <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="mb-3 text-sm font-semibold text-slate-900">Visibility in App</h3>
         <div className="flex flex-wrap gap-6">
-          <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
               checked={showOptionType}
@@ -598,7 +397,7 @@ export default function AdminOrdersPage() {
             />
             Show CE / PE (Option Type)
           </label>
-          <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
               checked={showSide}
@@ -647,14 +446,13 @@ export default function AdminOrdersPage() {
                 <th className="whitespace-nowrap px-1.5 py-2 font-medium">Man</th>
                 <th className="whitespace-nowrap px-1.5 py-2 font-medium">P/L %</th>
                 <th className="whitespace-nowrap px-1.5 py-2 font-medium">Status</th>
-                <th className="whitespace-nowrap px-1.5 py-2 font-medium">Trade</th>
                 <th className="whitespace-nowrap px-1.5 py-2 font-medium"> </th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={25} className="px-3 py-6 text-center text-slate-500">
+                  <td colSpan={23} className="px-3 py-6 text-center text-slate-500">
                     No rows. Click &quot;Add order&quot; to create one.
                   </td>
                 </tr>
@@ -861,7 +659,7 @@ export default function AdminOrdersPage() {
                         }
                       />
                     </td>
-                    <td className="px-1.5 py-1 align-top pt-2">
+                    <td className="px-1.5 py-1 pt-2 align-top">
                       <input
                         type="checkbox"
                         checked={!!row.pnlManual}
@@ -901,28 +699,6 @@ export default function AdminOrdersPage() {
                       </select>
                     </td>
                     <td className="px-1.5 py-1 align-top">
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          disabled={placingRowIdx !== null || !scopeUserId}
-                          onClick={() => void placeTradeFromRow(idx, "BUY")}
-                          className="rounded bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-40"
-                          title={!scopeUserId ? "Select a user first" : `BUY ${row.symbol}`}
-                        >
-                          {placingRowIdx === idx ? "…" : "B"}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={placingRowIdx !== null || !scopeUserId}
-                          onClick={() => void placeTradeFromRow(idx, "SELL")}
-                          className="rounded bg-rose-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-rose-700 disabled:opacity-40"
-                          title={!scopeUserId ? "Select a user first" : `SELL ${row.symbol}`}
-                        >
-                          {placingRowIdx === idx ? "…" : "S"}
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-1.5 py-1 align-top">
                       <button
                         type="button"
                         className="whitespace-nowrap text-rose-600 hover:underline"
@@ -938,289 +714,6 @@ export default function AdminOrdersPage() {
           </table>
         </div>
       </section>
-
-      {/* ── Place a real trade ── */}
-      <section className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
-        <h3 className="mb-3 text-sm font-semibold text-emerald-900">
-          Place live trade — {scopeUserId ? (users.find(u => u._id === scopeUserId)?.fullName || users.find(u => u._id === scopeUserId)?.email || scopeUserId) : "no user selected"}
-        </h3>
-        {!scopeUserId && (
-          <p className="mb-3 text-xs text-amber-700">Select a user above first.</p>
-        )}
-        <div className="flex flex-wrap gap-2">
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-medium text-slate-500">Symbol</label>
-            <input className={inp} placeholder="NIFTY / RELIANCE / GOLD" value={tradeForm.symbol}
-              onChange={(e) => setTradeForm((f) => ({ ...f, symbol: e.target.value.toUpperCase() }))} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-medium text-slate-500">Exchange</label>
-            <select className={inp} value={tradeForm.exchange}
-              onChange={(e) => setTradeForm((f) => ({ ...f, exchange: e.target.value }))}>
-              <option>NSE</option><option>BSE</option><option>NFO</option>
-              <option>BFO</option><option>MCX</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-medium text-slate-500">Side</label>
-            <select className={inp} value={tradeForm.side}
-              onChange={(e) => setTradeForm((f) => ({ ...f, side: e.target.value as "BUY" | "SELL" }))}>
-              <option>BUY</option><option>SELL</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-medium text-slate-500">Qty</label>
-            <input type="number" min={1} className={`${inpNum} w-20`} value={tradeForm.qty}
-              onChange={(e) => setTradeForm((f) => ({ ...f, qty: Number(e.target.value) }))} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-medium text-slate-500">Product</label>
-            <select className={inp} value={tradeForm.productType}
-              onChange={(e) => setTradeForm((f) => ({ ...f, productType: e.target.value }))}>
-              <option>CNC</option><option>MIS</option><option>NRML</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-medium text-slate-500">Opt type</label>
-            <select className={inp} value={tradeForm.optionType}
-              onChange={(e) => setTradeForm((f) => ({ ...f, optionType: e.target.value }))}>
-              <option value="">—</option><option>CE</option><option>PE</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-medium text-slate-500">Strike</label>
-            <input type="number" className={`${inpNum} w-20`} placeholder="0" value={tradeForm.strikePrice}
-              onChange={(e) => setTradeForm((f) => ({ ...f, strikePrice: e.target.value }))} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-medium text-slate-500">Expiry</label>
-            <input className={inp} placeholder="25APR2026" value={tradeForm.expiry}
-              onChange={(e) => setTradeForm((f) => ({ ...f, expiry: e.target.value }))} />
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" disabled={tradePlacing}
-            onClick={() => void placeLiveTrade()}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
-            {tradePlacing ? "Placing…" : `${tradeForm.side} at market`}
-          </button>
-          <button type="button" disabled={liveTradesLoading}
-            onClick={() => void loadLiveTrades()}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50">
-            {liveTradesLoading ? "Loading…" : "Load trades"}
-          </button>
-        </div>
-        {tradeMsg && <p className="mt-2 rounded bg-emerald-100 px-3 py-1.5 text-xs text-emerald-900">{tradeMsg}</p>}
-        {tradeErr && <p className="mt-2 rounded bg-rose-100 px-3 py-1.5 text-xs text-rose-900">{tradeErr}</p>}
-      </section>
-
-      {/* ── Live trades CRUD table ── */}
-      {scopeUserId && (
-        <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-slate-900">
-              Live trades (MongoDB) — {liveTrades.length} record{liveTrades.length !== 1 ? "s" : ""}
-            </h3>
-            <button
-              type="button"
-              disabled={liveTradesLoading}
-              onClick={() => void loadLiveTrades()}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-            >
-              {liveTradesLoading ? "Loading…" : "Reload"}
-            </button>
-          </div>
-          {liveTradesErr && <p className="mb-2 text-xs text-rose-700">{liveTradesErr}</p>}
-          {liveTrades.length === 0 && !liveTradesLoading ? (
-            <p className="py-6 text-center text-sm text-slate-500">No trades found for this user.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left text-[11px]">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
-                    {["Symbol","Exch","Side","Qty","Price","Total","P&L","Product","Opt","Strike","Expiry","Status","Date","Actions"].map((h) => (
-                      <th key={h} className="whitespace-nowrap px-2 py-2 font-medium">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {liveTrades.map((t) => {
-                    const editing = editingTrades[t._id];
-                    const isEditing = !!editing;
-                    const isSaving = savingTradeId === t._id;
-                    const isDeleting = deletingTradeId === t._id;
-                    const d = isEditing ? editing : t;
-
-                    return (
-                      <tr key={t._id} className={`border-b border-slate-100 ${isEditing ? "bg-amber-50" : "hover:bg-slate-50/80"}`}>
-                        {/* Symbol */}
-                        <td className="px-1.5 py-1">
-                          {isEditing ? (
-                            <input className={inp} value={d.symbol} onChange={(e) => updateEditTrade(t._id, "symbol", e.target.value)} />
-                          ) : (
-                            <span className="font-medium">{t.symbol}</span>
-                          )}
-                        </td>
-                        {/* Exchange */}
-                        <td className="px-1.5 py-1">
-                          {isEditing ? (
-                            <input className={inp} value={d.exchange} onChange={(e) => updateEditTrade(t._id, "exchange", e.target.value)} style={{ width: 52 }} />
-                          ) : (
-                            <span className="text-slate-500">{t.exchange}</span>
-                          )}
-                        </td>
-                        {/* Side */}
-                        <td className="px-1.5 py-1">
-                          {isEditing ? (
-                            <select className={inp} value={d.side} onChange={(e) => updateEditTrade(t._id, "side", e.target.value as "BUY" | "SELL")}>
-                              <option value="BUY">BUY</option>
-                              <option value="SELL">SELL</option>
-                            </select>
-                          ) : (
-                            <span className={`font-semibold ${t.side === "BUY" ? "text-emerald-700" : "text-rose-600"}`}>{t.side}</span>
-                          )}
-                        </td>
-                        {/* Qty */}
-                        <td className="px-1.5 py-1">
-                          {isEditing ? (
-                            <input type="number" className={inpNum} style={{ width: 60 }} value={d.qty} onChange={(e) => updateEditTrade(t._id, "qty", Number(e.target.value))} />
-                          ) : (
-                            <span className="text-right block">{t.qty}</span>
-                          )}
-                        </td>
-                        {/* Price */}
-                        <td className="px-1.5 py-1">
-                          {isEditing ? (
-                            <input type="number" step="any" className={inpNum} style={{ width: 80 }} value={d.price} onChange={(e) => updateEditTrade(t._id, "price", Number(e.target.value))} />
-                          ) : (
-                            <span className="text-right block">₹{Number(t.price).toLocaleString()}</span>
-                          )}
-                        </td>
-                        {/* Total */}
-                        <td className="px-1.5 py-1">
-                          {isEditing ? (
-                            <input type="number" step="any" className={inpNum} style={{ width: 80 }} value={d.totalValue} onChange={(e) => updateEditTrade(t._id, "totalValue", Number(e.target.value))} />
-                          ) : (
-                            <span className="text-right block">₹{Number(t.totalValue).toLocaleString()}</span>
-                          )}
-                        </td>
-                        {/* P&L */}
-                        <td className="px-1.5 py-1">
-                          {isEditing ? (
-                            <input type="number" step="any" className={inpNum} style={{ width: 72 }} value={d.pnl ?? 0} onChange={(e) => updateEditTrade(t._id, "pnl", Number(e.target.value))} />
-                          ) : (
-                            <span className={`text-right block ${Number(t.pnl) >= 0 ? "text-emerald-700" : "text-rose-600"}`}>
-                              {Number(t.pnl) >= 0 ? "+" : ""}₹{Number(t.pnl ?? 0).toLocaleString()}
-                            </span>
-                          )}
-                        </td>
-                        {/* Product */}
-                        <td className="px-1.5 py-1">
-                          {isEditing ? (
-                            <select className={inp} value={d.productType} onChange={(e) => updateEditTrade(t._id, "productType", e.target.value)}>
-                              <option>CNC</option><option>MIS</option><option>NRML</option>
-                            </select>
-                          ) : (
-                            <span className="text-slate-500">{t.productType}</span>
-                          )}
-                        </td>
-                        {/* Opt */}
-                        <td className="px-1.5 py-1">
-                          {isEditing ? (
-                            <select className={inp} value={d.optionType || ""} onChange={(e) => updateEditTrade(t._id, "optionType", e.target.value)}>
-                              <option value="">—</option><option>CE</option><option>PE</option>
-                            </select>
-                          ) : (
-                            <span className="text-slate-500">{t.optionType || "—"}</span>
-                          )}
-                        </td>
-                        {/* Strike */}
-                        <td className="px-1.5 py-1">
-                          {isEditing ? (
-                            <input type="number" className={inpNum} style={{ width: 72 }} value={d.strikePrice ?? ""} onChange={(e) => updateEditTrade(t._id, "strikePrice", Number(e.target.value))} />
-                          ) : (
-                            <span className="text-slate-500">{t.strikePrice || "—"}</span>
-                          )}
-                        </td>
-                        {/* Expiry */}
-                        <td className="px-1.5 py-1">
-                          {isEditing ? (
-                            <input className={inp} style={{ width: 90 }} value={d.expiry || ""} onChange={(e) => updateEditTrade(t._id, "expiry", e.target.value)} placeholder="28APR2026" />
-                          ) : (
-                            <span className="text-slate-500">{t.expiry || "—"}</span>
-                          )}
-                        </td>
-                        {/* Status */}
-                        <td className="px-1.5 py-1">
-                          {isEditing ? (
-                            <select className={inp} value={d.status} onChange={(e) => updateEditTrade(t._id, "status", e.target.value)}>
-                              <option>EXECUTED</option>
-                              <option>PENDING</option>
-                              <option>CANCELLED</option>
-                              <option>REJECTED</option>
-                            </select>
-                          ) : (
-                            <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${t.status === "EXECUTED" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"}`}>
-                              {t.status}
-                            </span>
-                          )}
-                        </td>
-                        {/* Date */}
-                        <td className="px-2 py-1 text-slate-400 whitespace-nowrap">
-                          {new Date(t.createdAt).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}
-                        </td>
-                        {/* Actions */}
-                        <td className="px-1.5 py-1">
-                          <div className="flex gap-1 whitespace-nowrap">
-                            {isEditing ? (
-                              <>
-                                <button
-                                  type="button"
-                                  disabled={isSaving}
-                                  onClick={() => void saveEditTrade(t._id)}
-                                  className="rounded bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-40"
-                                >
-                                  {isSaving ? "…" : "Save"}
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={isSaving}
-                                  onClick={() => cancelEditTrade(t._id)}
-                                  className="rounded border border-slate-300 px-2 py-1 text-[10px] text-slate-600 hover:bg-slate-100 disabled:opacity-40"
-                                >
-                                  Cancel
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => startEditTrade(t)}
-                                  className="rounded bg-sky-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-sky-700"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={isDeleting}
-                                  onClick={() => void deleteTrade(t._id)}
-                                  className="rounded bg-rose-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-rose-700 disabled:opacity-40"
-                                >
-                                  {isDeleting ? "…" : "Del"}
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
     </div>
   );
 }

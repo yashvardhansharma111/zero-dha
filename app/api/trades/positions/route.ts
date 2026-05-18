@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth";
 import { getPositions } from "@/lib/trades";
+import { getEffectiveOrdersConfigForUser } from "@/lib/effective-orders-config";
+import { computeOrderPnl } from "@/lib/admin-orders-pnl";
 
 /**
- * GET /api/trades/positions — user's open positions with live P&L.
+ * GET /api/trades/positions
+ * Returns admin-configured position rows for this user when they exist,
+ * otherwise falls back to real DB positions with live LTP.
+ * Uses the same effective config as /api/config/orders so the summary
+ * always matches what the app's position list shows.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -12,8 +18,66 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const positions = await getPositions(user._id.toString());
+    const userId = user._id.toString();
 
+    // Use the same effective config (global + user merge) that drives configRows in the app
+    const effectiveConfig = await getEffectiveOrdersConfigForUser(userId);
+    const adminPositions = (effectiveConfig.orders ?? []).filter(
+      (r) => r.segmentKey === "positions" && r.status !== "CLOSED",
+    );
+
+    if (adminPositions.length > 0) {
+      const positions = adminPositions.map((r) => {
+        const pnl = computeOrderPnl(r);
+        const qty = Number(r.qty || 0);
+        const avgPrice = Number(r.avgPrice || 0);
+        const ltp = Number(r.ltp || r.sellPrice || r.buyPrice || avgPrice || 0);
+        const investedValue = avgPrice * qty;
+        const currentValue = ltp * qty;
+        const pnlPct =
+          r.pnlPct != null
+            ? Number(r.pnlPct)
+            : investedValue > 0
+            ? (pnl / investedValue) * 100
+            : 0;
+        return {
+          id: r.id,
+          symbol: r.symbol,
+          exchange: r.exchange || r.market || "NSE",
+          side: r.side,
+          qty,
+          avgPrice,
+          ltp,
+          pnl,
+          pnlPct,
+          currentValue,
+          investedValue,
+          productType: r.productType,
+          optionType: r.optionType,
+          strikePrice: r.strikePrice,
+          expiry: r.expiryDate || undefined,
+        };
+      });
+
+      const totalInvested = positions.reduce((s, p) => s + p.investedValue, 0);
+      const totalCurrent = positions.reduce((s, p) => s + p.currentValue, 0);
+      const totalPnl = positions.reduce((s, p) => s + p.pnl, 0);
+      const totalPnlPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
+
+      return NextResponse.json({
+        positions,
+        summary: {
+          totalInvested,
+          totalCurrent,
+          totalPnl,
+          totalPnlPct,
+          count: positions.length,
+        },
+      });
+    }
+
+    // Fall back to real DB positions with live LTP
+    const positions = await getPositions(userId);
     const totalInvested = positions.reduce((s, p) => s + p.investedValue, 0);
     const totalCurrent = positions.reduce((s, p) => s + p.currentValue, 0);
     const totalPnl = totalCurrent - totalInvested;

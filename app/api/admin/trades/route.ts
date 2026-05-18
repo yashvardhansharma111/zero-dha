@@ -32,7 +32,9 @@ export async function GET(request: Request) {
       .limit(limit)
       .toArray();
 
-    return NextResponse.json({ trades });
+    return NextResponse.json({
+      trades: trades.map((t) => ({ ...t, _id: t._id!.toString() })),
+    });
   } catch (error: any) {
     console.error("[admin/trades GET]", error);
     return NextResponse.json(
