@@ -43,43 +43,55 @@ export async function sendClientCredentialsEmail({
     throw new Error("SMTP sender is not configured");
   }
 
-  const name = fullName?.trim() || "Client";
+  const name = fullName?.trim() || "Investor";
   const html = `
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#f8fafc;color:#0f172a">
-      <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:24px">
-        <h2 style="margin:0 0 12px;font-size:24px;color:#0369a1">Nokia Securities Login Credentials</h2>
-        <p style="margin:0 0 16px;font-size:14px;line-height:1.6">Hello ${name},</p>
-        <p style="margin:0 0 16px;font-size:14px;line-height:1.6">
-          Your trading account has been activated by the admin team. Use the credentials below to sign in to the app.
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#f4f6f8;color:#1a1a2e">
+      <div style="background:#ffffff;border:1px solid #dde3ea;border-radius:12px;padding:32px">
+        <p style="margin:0 0 4px;font-size:12px;font-weight:600;letter-spacing:1px;color:#6b7280;text-transform:uppercase">Zero-dha</p>
+        <h2 style="margin:0 0 20px;font-size:22px;color:#111827;font-weight:700">Your account is ready</h2>
+        <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151">Dear ${name},</p>
+        <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#374151">
+          Welcome to Zero-dha. Your trading account has been set up and is now active.
+          Below are the details you need to sign in to the app.
         </p>
-        <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px;padding:16px;margin:16px 0">
-          <p style="margin:0 0 8px;font-size:14px"><strong>Client ID:</strong> ${clientId}</p>
-          <p style="margin:0;font-size:14px"><strong>Password:</strong> ${password}</p>
-        </div>
-        <p style="margin:0 0 8px;font-size:14px;line-height:1.6">
-          Please keep these credentials secure. After signing in, you can review your profile, orders, positions, funds, and ledger inside the app.
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:20px;margin:0 0 20px">
+          <tr>
+            <td style="font-size:13px;color:#6b7280;padding-bottom:8px">Client ID</td>
+            <td style="font-size:15px;font-weight:700;color:#111827;text-align:right;padding-bottom:8px">${clientId}</td>
+          </tr>
+          <tr>
+            <td style="font-size:13px;color:#6b7280">Access key</td>
+            <td style="font-size:15px;font-weight:700;color:#111827;text-align:right">${password}</td>
+          </tr>
+        </table>
+        <p style="margin:0 0 20px;font-size:14px;line-height:1.7;color:#6b7280">
+          Once signed in, you can view your portfolio, open positions, fund details, and transaction history inside the app.
         </p>
-        <p style="margin:16px 0 0;font-size:12px;color:#475569">
-          If you did not request this account, please contact support immediately.
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0" />
+        <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6">
+          This message was sent to you because an account was created in your name on Zero-dha. If you have any questions, reach out to your relationship manager.
         </p>
       </div>
     </div>
   `;
 
   const text = [
-    `Hello ${name},`,
+    `Dear ${name},`,
     "",
-    "Your Nokia Securities trading account has been activated.",
-    `Client ID: ${clientId}`,
-    `Password: ${password}`,
+    "Welcome to Zero-dha. Your trading account is now active.",
     "",
-    "Please keep these credentials secure.",
+    `Client ID : ${clientId}`,
+    `Access key: ${password}`,
+    "",
+    "Sign in to the app to view your portfolio, positions, and funds.",
+    "",
+    "If you have questions, contact your relationship manager.",
   ].join("\n");
 
   await getTransporter().sendMail({
-    from,
+    from: `Zero-dha <${from}>`,
     to,
-    subject: "Your Nokia Securities login credentials",
+    subject: `Welcome to Zero-dha — account activated`,
     html,
     text,
   });
