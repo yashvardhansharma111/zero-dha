@@ -33,6 +33,7 @@ export async function GET(request: Request) {
         status: item.status || "pending",
         createdAt: item.createdAt,
         processedAt: item.processedAt || null,
+        hasProof: Boolean(item.proof?.data),
       })),
     });
   } catch (error) {
@@ -54,10 +55,40 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await request.json();
-    const { amount, method, reference, note, type } = body || {};
+    const contentType = request.headers.get("content-type") || "";
+    let amount: number;
+    let method: string;
+    let reference: string;
+    let note: string;
+    let type: string;
+    let proofDoc: { data: Buffer; contentType: string } | null = null;
 
-    const numericAmount = Number(amount);
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await request.formData();
+      amount = Number(formData.get("amount") || 0);
+      method = String(formData.get("method") || "upi");
+      reference = String(formData.get("reference") || "");
+      note = String(formData.get("note") || "");
+      type = String(formData.get("type") || "add");
+
+      const proofFile = formData.get("proof");
+      if (proofFile instanceof File && proofFile.size > 0) {
+        const buf = await proofFile.arrayBuffer();
+        proofDoc = {
+          data: Buffer.from(buf),
+          contentType: proofFile.type || "image/jpeg",
+        };
+      }
+    } else {
+      const body = await request.json();
+      amount = Number(body?.amount || 0);
+      method = String(body?.method || "upi");
+      reference = String(body?.reference || "");
+      note = String(body?.note || "");
+      type = String(body?.type || "add");
+    }
+
+    const numericAmount = amount;
     if (!numericAmount || numericAmount <= 0) {
       return NextResponse.json(
         { message: "Valid amount is required" },
@@ -71,9 +102,9 @@ export async function POST(request: Request) {
     const requestType = type === "withdraw" ? "withdraw" : "add";
 
     if (requestType === "withdraw") {
-      const currentUser = await users.findOne<{
-        tradingBalance?: number;
-      }>({ _id: new ObjectId((user as { _id: ObjectId })._id) });
+      const currentUser = await users.findOne<{ tradingBalance?: number }>({
+        _id: new ObjectId((user as { _id: ObjectId })._id),
+      });
       const currentBalance = Number(currentUser?.tradingBalance ?? 0);
       if (numericAmount > currentBalance) {
         return NextResponse.json(
@@ -83,7 +114,7 @@ export async function POST(request: Request) {
       }
     }
 
-    await funds.insertOne({
+    const insertDoc: Record<string, unknown> = {
       userId: new ObjectId((user as { _id: ObjectId })._id),
       type: requestType,
       amount: numericAmount,
@@ -92,7 +123,13 @@ export async function POST(request: Request) {
       note: note || "",
       status: "pending",
       createdAt: new Date(),
-    });
+    };
+
+    if (proofDoc) {
+      insertDoc.proof = proofDoc;
+    }
+
+    await funds.insertOne(insertDoc);
 
     return NextResponse.json({
       message:
