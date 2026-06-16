@@ -88,7 +88,7 @@ export async function GET(
       return NextResponse.json({ message: "Proof image invalid" }, { status: 500 });
     }
 
-    return new NextResponse(bytes, {
+    return new NextResponse(new Uint8Array(bytes), {
       headers: { "Content-Type": proofData.contentType, "Cache-Control": "no-store" },
     });
   } catch (error) {

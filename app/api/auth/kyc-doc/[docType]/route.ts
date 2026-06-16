@@ -68,7 +68,7 @@ export async function GET(
             const buf = Buffer.from(await upstream.arrayBuffer());
             const ct = upstream.headers.get("content-type") || "image/jpeg";
             console.log(tag, "proxying UploadThing image, bytes:", buf.byteLength);
-            return new NextResponse(buf, {
+            return new NextResponse(new Uint8Array(buf), {
               headers: { "Content-Type": ct, "Cache-Control": "no-store" },
             });
           }
@@ -100,7 +100,7 @@ export async function GET(
       return NextResponse.json({ message: "Document invalid" }, { status: 500 });
     }
 
-    return new NextResponse(bytes, {
+    return new NextResponse(new Uint8Array(bytes), {
       headers: { "Content-Type": doc.contentType, "Cache-Control": "no-store" },
     });
   } catch (error) {

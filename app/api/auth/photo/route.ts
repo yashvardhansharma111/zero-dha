@@ -51,7 +51,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: "Profile photo invalid" }, { status: 500 });
     }
 
-    return new NextResponse(bytes, {
+    return new NextResponse(new Uint8Array(bytes), {
       headers: {
         "Content-Type": photo.contentType,
         "Cache-Control": "no-store",
