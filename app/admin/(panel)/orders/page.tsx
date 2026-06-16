@@ -130,6 +130,7 @@ export default function AdminOrdersPage() {
           orders?: OrderRow[];
           showOptionType?: boolean;
           showSide?: boolean;
+          showStrike?: boolean;
         };
         source?: string;
       }>(`/api/admin/orders?scopeUserId=${encodeURIComponent(scopeUserId)}`);
