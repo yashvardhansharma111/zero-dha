@@ -100,6 +100,7 @@ export default function AdminOrdersPage() {
   const [err, setErr] = useState<string | null>(null);
   const [showOptionType, setShowOptionType] = useState(true);
   const [showSide, setShowSide] = useState(true);
+  const [showStrike, setShowStrike] = useState(true);
 
   const totalPnl = useMemo(
     () => rows.reduce((a, o) => a + computeOrderPnl(o), 0),
@@ -135,6 +136,7 @@ export default function AdminOrdersPage() {
       const cfg = data.config || {};
       setShowOptionType(cfg.showOptionType !== false);
       setShowSide(cfg.showSide !== false);
+      setShowStrike(cfg.showStrike !== false);
       const segs = cfg.segments;
       setSegments(
         Array.isArray(segs) && segs.length > 0 ? segs : DEFAULT_SEGMENTS,
@@ -194,6 +196,7 @@ export default function AdminOrdersPage() {
             orders: rows,
             showOptionType,
             showSide,
+            showStrike,
           },
         }),
       });
@@ -405,6 +408,15 @@ export default function AdminOrdersPage() {
               className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
             />
             Show BUY / SELL (Side)
+          </label>
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={showStrike}
+              onChange={(e) => setShowStrike(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
+            />
+            Show Strike Price
           </label>
         </div>
       </section>

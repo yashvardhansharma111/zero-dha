@@ -43,6 +43,7 @@ export async function GET(request: Request) {
         segments: Array.isArray(config.segments) ? config.segments : [],
         showOptionType: config.showOptionType,
         showSide: config.showSide,
+        showStrike: config.showStrike,
       },
     });
   } catch (error) {

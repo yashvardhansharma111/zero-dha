@@ -39,6 +39,7 @@ export type OrdersConfigEffective = {
   orders: OrderRowEffective[];
   showOptionType?: boolean;
   showSide?: boolean;
+  showStrike?: boolean;
 };
 
 const KEY = "dashboard_orders";
@@ -116,5 +117,6 @@ export async function getEffectiveOrdersConfigForUser(
     orders: Array.from(byId.values()),
     showOptionType: u.showOptionType ?? global.showOptionType,
     showSide: u.showSide ?? global.showSide,
+    showStrike: u.showStrike ?? global.showStrike,
   };
 }
