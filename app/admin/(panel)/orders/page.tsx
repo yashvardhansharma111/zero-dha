@@ -34,6 +34,9 @@ type OrderRow = {
   status: "OPEN" | "CLOSED";
   buyAt?: number;
   sellAt?: number;
+  showOptionType?: boolean;
+  showSide?: boolean;
+  showStrike?: boolean;
 };
 
 const DEFAULT_SEGMENTS: OrderSegment[] = [
@@ -100,9 +103,6 @@ export default function AdminOrdersPage() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [showOptionType, setShowOptionType] = useState(true);
-  const [showSide, setShowSide] = useState(true);
-  const [showStrike, setShowStrike] = useState(true);
 
   const totalPnl = useMemo(
     () => rows.reduce((a, o) => a + computeOrderPnl(o), 0),
@@ -137,9 +137,6 @@ export default function AdminOrdersPage() {
         source?: string;
       }>(`/api/admin/orders?scopeUserId=${encodeURIComponent(scopeUserId)}`);
       const cfg = data.config || {};
-      setShowOptionType(cfg.showOptionType !== false);
-      setShowSide(cfg.showSide !== false);
-      setShowStrike(cfg.showStrike !== false);
       const segs = cfg.segments;
       setSegments(
         Array.isArray(segs) && segs.length > 0 ? segs : DEFAULT_SEGMENTS,
@@ -197,9 +194,6 @@ export default function AdminOrdersPage() {
             summary,
             segments,
             orders: rows,
-            showOptionType,
-            showSide,
-            showStrike,
           },
         }),
       });
@@ -391,39 +385,6 @@ export default function AdminOrdersPage() {
         </div>
       </section>
 
-      <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 className="mb-3 text-sm font-semibold text-slate-900">Visibility in App</h3>
-        <div className="flex flex-wrap gap-6">
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={showOptionType}
-              onChange={(e) => setShowOptionType(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
-            />
-            Show CE / PE (Option Type)
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={showSide}
-              onChange={(e) => setShowSide(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
-            />
-            Show BUY / SELL (Side)
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={showStrike}
-              onChange={(e) => setShowStrike(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
-            />
-            Show Strike Price
-          </label>
-        </div>
-      </section>
-
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-slate-900">Order rows</h3>
@@ -461,6 +422,9 @@ export default function AdminOrdersPage() {
                 <th className="whitespace-nowrap px-1.5 py-2 font-medium">Man</th>
                 <th className="whitespace-nowrap px-1.5 py-2 font-medium">P/L %</th>
                 <th className="whitespace-nowrap px-1.5 py-2 font-medium">Status</th>
+                <th className="whitespace-nowrap px-1.5 py-2 font-medium text-slate-400" title="Show CE/PE to user">Opt?</th>
+                <th className="whitespace-nowrap px-1.5 py-2 font-medium text-slate-400" title="Show BUY/SELL to user">Side?</th>
+                <th className="whitespace-nowrap px-1.5 py-2 font-medium text-slate-400" title="Show Strike to user">Str?</th>
                 <th className="whitespace-nowrap px-1.5 py-2 font-medium text-emerald-700">Buy@</th>
                 <th className="whitespace-nowrap px-1.5 py-2 font-medium text-rose-600">Sell@</th>
                 <th className="whitespace-nowrap px-1.5 py-2 font-medium"> </th>
@@ -469,7 +433,7 @@ export default function AdminOrdersPage() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={25} className="px-3 py-6 text-center text-slate-500">
+                  <td colSpan={28} className="px-3 py-6 text-center text-slate-500">
                     No rows. Click &quot;Add order&quot; to create one.
                   </td>
                 </tr>
@@ -715,6 +679,33 @@ export default function AdminOrdersPage() {
                         <option value="OPEN">OPEN</option>
                         <option value="CLOSED">CLOSED</option>
                       </select>
+                    </td>
+                    <td className="px-1.5 py-2 align-top text-center">
+                      <input
+                        type="checkbox"
+                        title="Show CE/PE to user"
+                        checked={row.showOptionType !== false}
+                        onChange={(e) => updateRow(idx, { showOptionType: e.target.checked })}
+                        className="h-4 w-4 accent-emerald-600"
+                      />
+                    </td>
+                    <td className="px-1.5 py-2 align-top text-center">
+                      <input
+                        type="checkbox"
+                        title="Show BUY/SELL to user"
+                        checked={row.showSide !== false}
+                        onChange={(e) => updateRow(idx, { showSide: e.target.checked })}
+                        className="h-4 w-4 accent-emerald-600"
+                      />
+                    </td>
+                    <td className="px-1.5 py-2 align-top text-center">
+                      <input
+                        type="checkbox"
+                        title="Show Strike to user"
+                        checked={row.showStrike !== false}
+                        onChange={(e) => updateRow(idx, { showStrike: e.target.checked })}
+                        className="h-4 w-4 accent-emerald-600"
+                      />
                     </td>
                     <td className="px-1.5 py-1 align-top">
                       <input

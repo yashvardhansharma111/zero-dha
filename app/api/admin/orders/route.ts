@@ -40,6 +40,9 @@ type OrderRow = {
   time?: string;
   buyAt?: number;
   sellAt?: number;
+  showOptionType?: boolean;
+  showSide?: boolean;
+  showStrike?: boolean;
 };
 
 type OrdersConfig = {
