@@ -38,6 +38,8 @@ type OrderRow = {
   pnl: number;
   status: "OPEN" | "CLOSED";
   time?: string;
+  buyAt?: number;
+  sellAt?: number;
 };
 
 type OrdersConfig = {

@@ -32,6 +32,8 @@ type OrderRow = {
   pnlPct?: number;
   pnl: number;
   status: "OPEN" | "CLOSED";
+  buyAt?: number;
+  sellAt?: number;
 };
 
 const DEFAULT_SEGMENTS: OrderSegment[] = [
@@ -459,13 +461,15 @@ export default function AdminOrdersPage() {
                 <th className="whitespace-nowrap px-1.5 py-2 font-medium">Man</th>
                 <th className="whitespace-nowrap px-1.5 py-2 font-medium">P/L %</th>
                 <th className="whitespace-nowrap px-1.5 py-2 font-medium">Status</th>
+                <th className="whitespace-nowrap px-1.5 py-2 font-medium text-emerald-700">Buy@</th>
+                <th className="whitespace-nowrap px-1.5 py-2 font-medium text-rose-600">Sell@</th>
                 <th className="whitespace-nowrap px-1.5 py-2 font-medium"> </th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={23} className="px-3 py-6 text-center text-slate-500">
+                  <td colSpan={25} className="px-3 py-6 text-center text-slate-500">
                     No rows. Click &quot;Add order&quot; to create one.
                   </td>
                 </tr>
@@ -711,6 +715,30 @@ export default function AdminOrdersPage() {
                         <option value="OPEN">OPEN</option>
                         <option value="CLOSED">CLOSED</option>
                       </select>
+                    </td>
+                    <td className="px-1.5 py-1 align-top">
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="—"
+                        className={inpNum}
+                        value={row.buyAt ?? ""}
+                        onChange={(e) =>
+                          updateRow(idx, { buyAt: e.target.value === "" ? undefined : Number(e.target.value) })
+                        }
+                      />
+                    </td>
+                    <td className="px-1.5 py-1 align-top">
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="—"
+                        className={inpNum}
+                        value={row.sellAt ?? ""}
+                        onChange={(e) =>
+                          updateRow(idx, { sellAt: e.target.value === "" ? undefined : Number(e.target.value) })
+                        }
+                      />
                     </td>
                     <td className="px-1.5 py-1 align-top">
                       <button

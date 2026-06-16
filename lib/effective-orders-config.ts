@@ -31,6 +31,8 @@ export type OrderRowEffective = {
   pnl: number;
   status: "OPEN" | "CLOSED";
   time?: string;
+  buyAt?: number;
+  sellAt?: number;
 };
 
 export type OrdersConfigEffective = {
