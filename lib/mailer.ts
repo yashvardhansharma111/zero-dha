@@ -16,18 +16,18 @@ function getTransporter() {
 
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT || "587");
 
   if (!user || !pass) {
     throw new Error("SMTP credentials are not configured");
   }
 
-  transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user,
-      pass,
-    },
-  });
+  transporter = nodemailer.createTransport(
+    host
+      ? { host, port, secure: port === 465, auth: { user, pass } }
+      : { service: "gmail", auth: { user, pass } },
+  );
 
   return transporter;
 }
@@ -38,48 +38,66 @@ export async function sendClientCredentialsEmail({
   clientId,
   password,
 }: SendClientCredentialsEmailParams) {
-  const from = process.env.SMTP_USER;
-  if (!from) {
+  const fromEmail = process.env.SMTP_USER;
+  const fromName = process.env.SMTP_FROM_NAME || "Zero-dha";
+  if (!fromEmail) {
     throw new Error("SMTP sender is not configured");
   }
+  const from = `${fromName} <${fromEmail}>`;
 
-  const name = fullName?.trim() || "Client";
+  const name = fullName?.trim() || "Investor";
   const html = `
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#f8fafc;color:#0f172a">
-      <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:24px">
-        <h2 style="margin:0 0 12px;font-size:24px;color:#0369a1">Nokia Securities Login Credentials</h2>
-        <p style="margin:0 0 16px;font-size:14px;line-height:1.6">Hello ${name},</p>
-        <p style="margin:0 0 16px;font-size:14px;line-height:1.6">
-          Your trading account has been activated by the admin team. Use the credentials below to sign in to the app.
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#f4f6f8;color:#1a1a2e">
+      <div style="background:#ffffff;border:1px solid #dde3ea;border-radius:12px;padding:32px">
+
+        <p>Dear ${name},</p>
+
+        <p>
+          Welcome to Zero-dha. Your registration has been completed successfully.
+          Below are your login details for accessing your account.
         </p>
-        <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px;padding:16px;margin:16px 0">
-          <p style="margin:0 0 8px;font-size:14px"><strong>Client ID:</strong> ${clientId}</p>
-          <p style="margin:0;font-size:14px"><strong>Password:</strong> ${password}</p>
-        </div>
-        <p style="margin:0 0 8px;font-size:14px;line-height:1.6">
-          Please keep these credentials secure. After signing in, you can review your profile, orders, positions, funds, and ledger inside the app.
-        </p>
-        <p style="margin:16px 0 0;font-size:12px;color:#475569">
-          If you did not request this account, please contact support immediately.
-        </p>
+
+        <table width="100%" cellpadding="10" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;margin:16px 0">
+          <tr style="background:#f9fafb">
+            <td style="font-size:14px;color:#6b7280;border-bottom:1px solid #e5e7eb">User ID</td>
+            <td style="font-size:14px;font-weight:700;color:#111827;border-bottom:1px solid #e5e7eb">${clientId}</td>
+          </tr>
+          <tr>
+            <td style="font-size:14px;color:#6b7280">Temporary Login Code</td>
+            <td style="font-size:14px;font-weight:700;color:#111827">${password}</td>
+          </tr>
+        </table>
+
+        <p>Please sign in and update your login code after your first login.</p>
+
+        <p>If you did not request this account, please contact support immediately.</p>
+
+        <p style="margin:0;font-size:13px;color:#6b7280">Support: support@zero-dha.in</p>
+
       </div>
     </div>
   `;
 
   const text = [
-    `Hello ${name},`,
+    `Dear ${name},`,
     "",
-    "Your Nokia Securities trading account has been activated.",
-    `Client ID: ${clientId}`,
-    `Password: ${password}`,
+    "Welcome to Zero-dha. Your registration has been completed successfully.",
+    "Below are your login details for accessing your account.",
     "",
-    "Please keep these credentials secure.",
+    `User ID             : ${clientId}`,
+    `Temporary Login Code: ${password}`,
+    "",
+    "Please sign in and update your login code after your first login.",
+    "",
+    "If you did not request this account, please contact support immediately.",
+    "",
+    "Support: support@zero-dha.in",
   ].join("\n");
 
   await getTransporter().sendMail({
     from,
     to,
-    subject: "Your Nokia Securities login credentials",
+    subject: "Your Zero-dha account is ready",
     html,
     text,
   });

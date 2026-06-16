@@ -105,6 +105,15 @@ export async function authHeaders(): Promise<Record<string, string>> {
   };
 }
 
+async function parseJson(res: Response) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`Angel One returned non-JSON (session may have expired): ${text.slice(0, 120)}`);
+  }
+}
+
 /** Authenticated POST to SmartAPI. */
 export async function angelPost(path: string, body: unknown) {
   const headers = await authHeaders();
@@ -114,10 +123,11 @@ export async function angelPost(path: string, body: unknown) {
     body: JSON.stringify(body),
   });
 
-  const json = await res.json();
+  const json = await parseJson(res);
 
-  // Token expired → re-login once
-  if (json.message?.toLowerCase().includes("invalid token")) {
+  // Token expired → clear cache, re-login once, retry
+  if (json.message?.toLowerCase().includes("invalid token") ||
+      json.message?.toLowerCase().includes("access denied")) {
     setCached(null);
     const h2 = await authHeaders();
     const r2 = await fetch(`${BASE}${path}`, {
@@ -125,7 +135,7 @@ export async function angelPost(path: string, body: unknown) {
       headers: h2,
       body: JSON.stringify(body),
     });
-    return r2.json();
+    return parseJson(r2);
   }
 
   return json;

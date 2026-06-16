@@ -14,7 +14,7 @@ export async function GET() {
     const db = await getDb();
     const settings = db.collection("settings");
 
-    const imgDoc = await settings.findOne<{ value?: { data?: unknown } }>({
+    const imgDoc = await settings.findOne<{ value?: { data?: unknown }; updatedAt?: Date }>({
       key: "fund_qr_image",
     });
     const metaDoc = await settings.findOne<{ value?: FundPaymentMeta }>({
@@ -22,8 +22,9 @@ export async function GET() {
     });
 
     if (imgDoc?.value?.data) {
+      const v = imgDoc.updatedAt?.getTime() ?? Date.now();
       return NextResponse.json({
-        qrUrl: "/api/config/fund-qr-image",
+        qrUrl: `/api/config/fund-qr-image?v=${v}`,
         paymentMeta: metaDoc?.value || null,
       });
     }

@@ -3,7 +3,7 @@
     "name": "Nokia Securities",
     "slug": "nokia-securities",
     "extra": {
-      "apiUrl": "https://app.zero-dha.in",
+      "apiUrl": "https://app.zero-dha1.in",
       "eas": {
         "projectId": "d3c3749a-ce19-499c-906d-4666a7fa0f08"
       }

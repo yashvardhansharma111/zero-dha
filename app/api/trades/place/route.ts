@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth";
 import { placeOrder } from "@/lib/trades";
+import { getEffectiveOrdersConfigForUser } from "@/lib/effective-orders-config";
+import { upsertScopedConfig } from "@/lib/scoped-config";
 
 function isIndianMarketOpen(): { open: boolean; message?: string } {
   const now = new Date();
@@ -62,8 +64,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const userId = user._id.toString();
+
+    // For SELL: if no real DB position exists but an admin-configured position does,
+    // mark it as CLOSED so it disappears from the user's view (no real trade placed).
+    if (side === "SELL") {
+      const effectiveConfig = await getEffectiveOrdersConfigForUser(userId);
+      const symUp = symbol?.toUpperCase().trim();
+      const adminPos = (effectiveConfig.orders ?? []).find(
+        (r) =>
+          r.segmentKey === "positions" &&
+          r.status !== "CLOSED" &&
+          r.side?.toUpperCase() === "BUY" &&
+          (
+            r.symbol?.toUpperCase().trim() === symUp ||
+            r.symbol?.toUpperCase().trim().startsWith(symUp)
+          ),
+      );
+
+      if (adminPos) {
+        const updatedOrders = effectiveConfig.orders.map((r) =>
+          r.id === adminPos.id ? { ...r, status: "CLOSED" as const } : r,
+        );
+        await upsertScopedConfig({
+          key: "dashboard_orders",
+          userId,
+          config: { ...effectiveConfig, orders: updatedOrders },
+        });
+
+        const exitPrice = Number(adminPos.ltp || adminPos.avgPrice || 0);
+        return NextResponse.json({
+          message: `SELL ${qty} ${symbol} @ ₹${exitPrice.toFixed(2)}`,
+          trade: {
+            id: adminPos.id,
+            symbol,
+            exchange,
+            side: "SELL",
+            qty: Number(qty),
+            price: exitPrice,
+            totalValue: exitPrice * Number(qty),
+            status: "EXECUTED",
+            executedAt: new Date(),
+          },
+          newBalance: Number(user.tradingBalance ?? 0),
+        });
+      }
+    }
+
     const { trade, newBalance } = await placeOrder({
-      userId: user._id.toString(),
+      userId,
       symbol,
       exchange,
       side,

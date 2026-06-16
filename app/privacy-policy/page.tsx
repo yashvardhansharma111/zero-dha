@@ -51,7 +51,7 @@ export default function PrivacyPolicyPage() {
               Nokia Securities (&ldquo;we,&rdquo; &ldquo;our,&rdquo; or
               &ldquo;us&rdquo;) operates the Nokia Securities mobile application
               and the website at{" "}
-              <a href="https://app.zero-dha.in">https://app.zero-dha.in</a>{" "}
+              <a href="https://app.zero-dha1.in">https://app.zero-dha1.in</a>{" "}
               (collectively, the &ldquo;Service&rdquo;). The Service is a{" "}
               <strong>paper trading (simulated) application</strong> intended
               for education and practice. No real money is invested, deposited,
