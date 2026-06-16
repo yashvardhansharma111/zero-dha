@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       requests: requests.map((item) => ({
-        _id: item._id,
+        _id: item._id.toString(),
         type: item.type || "add",
         amount: item.amount,
         method: item.method || "upi",

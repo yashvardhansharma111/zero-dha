@@ -2,44 +2,42 @@ import { NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth";
 
 type StoredImage = {
-  data?: Buffer;
+  data?: unknown;
   contentType?: string;
 };
 
 function toBytes(input: unknown): Uint8Array | null {
   if (!input) return null;
-
-  if (input instanceof Uint8Array) {
-    return new Uint8Array(input);
-  }
-
-  if (typeof Buffer !== "undefined" && Buffer.isBuffer(input)) {
-    return new Uint8Array(input);
-  }
-
-  if (typeof input === "object") {
+  if (input instanceof Uint8Array) return new Uint8Array(input);
+  if (typeof Buffer !== "undefined" && Buffer.isBuffer(input)) return new Uint8Array(input);
+  if (typeof input === "object" && input !== null) {
     const obj = input as Record<string, unknown>;
-
-    const asBufferShape = obj as { type?: unknown; data?: unknown };
-    if (asBufferShape.type === "Buffer" && Array.isArray(asBufferShape.data)) {
-      return Uint8Array.from(asBufferShape.data as number[]);
+    // Node.js Buffer JSON serialisation
+    if (obj.type === "Buffer" && Array.isArray(obj.data)) {
+      return Uint8Array.from(obj.data as number[]);
     }
-
-    const asBinary = obj as { $binary?: unknown };
-    if (asBinary.$binary && typeof asBinary.$binary === "object") {
-      const b = asBinary.$binary as Record<string, unknown>;
-      const base64 = b.base64;
-      if (typeof base64 === "string" && typeof Buffer !== "undefined") {
-        return new Uint8Array(Buffer.from(base64, "base64"));
+    // BSON Binary value() method
+    if (typeof (obj as { value?: unknown }).value === "function") {
+      try {
+        const val = (obj as { value: () => unknown }).value();
+        if (val instanceof Uint8Array) return new Uint8Array(val);
+        if (typeof Buffer !== "undefined" && Buffer.isBuffer(val)) return new Uint8Array(val);
+      } catch {
+        // fall through
       }
     }
-
+    // BSON Binary .buffer property
     const maybeBuffer = obj.buffer;
-    if (maybeBuffer instanceof Uint8Array) {
-      return new Uint8Array(maybeBuffer);
+    if (maybeBuffer instanceof Uint8Array) return new Uint8Array(maybeBuffer);
+    // MongoDB Extended JSON
+    const bin = (obj as { $binary?: unknown }).$binary;
+    if (bin && typeof bin === "object") {
+      const b = bin as Record<string, unknown>;
+      if (typeof b.base64 === "string" && typeof Buffer !== "undefined") {
+        return new Uint8Array(Buffer.from(b.base64, "base64"));
+      }
     }
   }
-
   return null;
 }
 

@@ -50,9 +50,9 @@ function emptyRow(): OrderRow {
     symbol: "",
     market: "NSE",
     productType: "Delivery",
-    optionType: "CE",
+    optionType: "",
     strikePrice: 0,
-    exchange: "NSEFO",
+    exchange: "NSE",
     orderTag: "At Market",
     expiryDate: "",
     changePct: 0,
@@ -149,7 +149,7 @@ export default function AdminOrdersPage() {
                   segmentKey: row.segmentKey || "positions",
                   market: row.market || "NSE",
                   productType: row.productType || "Delivery",
-                  optionType: row.optionType || "CE",
+                  optionType: row.optionType || "",
                   exchange: row.exchange || row.market || "NSEFO",
                   orderTag: row.orderTag || "At Market",
                 },
@@ -522,9 +522,10 @@ export default function AdminOrdersPage() {
                     <td className="px-1.5 py-1 align-top">
                       <select
                         className={inp}
-                        value={row.optionType || "CE"}
+                        value={row.optionType || ""}
                         onChange={(e) => updateRow(idx, { optionType: e.target.value })}
                       >
+                        <option value="">— Equity</option>
                         <option value="CE">CE</option>
                         <option value="PE">PE</option>
                       </select>

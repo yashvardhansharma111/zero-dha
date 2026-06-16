@@ -45,8 +45,8 @@ export async function GET() {
     const result = requests.map((r) => {
       const u = userMap.get((r.userId as ObjectId).toString());
       return {
-        _id: r._id,
-        userId: r.userId,
+        _id: r._id.toString(),
+        userId: (r.userId as ObjectId).toString(),
         type: r.type || "add",
         amount: r.amount,
         method: r.method,
@@ -56,6 +56,7 @@ export async function GET() {
         createdAt: r.createdAt,
         userName: u?.fullName || "Unknown",
         userEmail: u?.email || "",
+        hasProof: Boolean(r.proof?.data),
       };
     });
 

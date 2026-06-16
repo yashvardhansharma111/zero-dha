@@ -85,9 +85,16 @@ export async function GET(request: Request) {
       (docs as { signatureUploadThingUrl?: string } | undefined)
         ?.signatureUploadThingUrl || null;
 
+    const fundRequests = await db
+      .collection("fund_requests")
+      .find({ userId: new ObjectId(userId) })
+      .sort({ createdAt: -1 })
+      .limit(30)
+      .toArray();
+
     return NextResponse.json({
       user: {
-        _id: user._id,
+        _id: user._id.toString(),
         fullName: user.fullName ?? null,
         email: user.email ?? null,
         phone: user.phone ?? null,
@@ -103,6 +110,17 @@ export async function GET(request: Request) {
         documentPreviews,
         signatureUploadThingUrl,
       },
+      fundRequests: fundRequests.map((r) => ({
+        _id: r._id.toString(),
+        type: r.type || "add",
+        amount: r.amount,
+        method: r.method || "upi",
+        reference: r.reference || "",
+        note: r.note || "",
+        status: r.status || "pending",
+        createdAt: r.createdAt,
+        hasProof: Boolean(r.proof?.data),
+      })),
     });
   } catch (error) {
     return apiErrorResponse(

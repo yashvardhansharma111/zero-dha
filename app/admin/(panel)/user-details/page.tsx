@@ -29,6 +29,18 @@ type UserDetail = {
   signatureUploadThingUrl?: string | null;
 };
 
+type FundReq = {
+  _id: string;
+  type: string;
+  amount: number;
+  method: string;
+  reference: string;
+  note: string;
+  status: string;
+  createdAt?: string | null;
+  hasProof: boolean;
+};
+
 function InfoRow({ label, value }: { label: string; value?: string | number | null }) {
   return (
     <div className="flex items-baseline gap-3 border-b border-slate-100 py-2.5">
@@ -74,6 +86,7 @@ export default function AdminUserDetailsPage() {
   const userId = searchParams.get("id");
 
   const [user, setUser] = useState<UserDetail | null>(null);
+  const [fundRequests, setFundRequests] = useState<FundReq[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -82,10 +95,11 @@ export default function AdminUserDetailsPage() {
     setLoading(true);
     setErr(null);
     try {
-      const data = await adminJson<{ user: UserDetail }>(
+      const data = await adminJson<{ user: UserDetail; fundRequests?: FundReq[] }>(
         `/api/admin/user-details?userId=${encodeURIComponent(userId)}`,
       );
       setUser(data.user || null);
+      setFundRequests(data.fundRequests || []);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to load");
     } finally {
@@ -177,6 +191,7 @@ export default function AdminUserDetailsPage() {
           { href: "#account", label: "Account" },
           { href: "#documents", label: "Documents" },
           { href: "#positions", label: "Positions & Orders" },
+          { href: "#payments", label: "Payment History" },
         ].map((t) => (
           <a
             key={t.href}
@@ -234,6 +249,78 @@ export default function AdminUserDetailsPage() {
           <DocPreview label="Bank proof" dataUri={docs.bankProof} />
           <DocPreview label="Supporting document" dataUri={docs.document} />
         </div>
+      </section>
+
+      {/* Payment History */}
+      <section id="payments" className="mt-6 scroll-mt-8">
+        <h3 className="mb-4 font-medium text-slate-900">Payment history</h3>
+        {fundRequests.length === 0 ? (
+          <p className="text-sm text-slate-400">No fund requests yet.</p>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[700px] text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+                    <th className="px-3 py-2">Type</th>
+                    <th className="px-3 py-2 text-right">Amount</th>
+                    <th className="px-3 py-2">Reference</th>
+                    <th className="px-3 py-2">Note</th>
+                    <th className="px-3 py-2">Proof</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fundRequests.map((r) => (
+                    <tr key={r._id} className="border-b border-slate-50 hover:bg-slate-50/50">
+                      <td className="px-3 py-2 capitalize text-slate-700">{r.type}</td>
+                      <td className="px-3 py-2 text-right tabular-nums font-medium text-slate-900">
+                        ₹{r.amount?.toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-3 py-2 max-w-[160px] truncate text-slate-600">
+                        {r.reference || "—"}
+                      </td>
+                      <td className="px-3 py-2 max-w-[200px] truncate text-slate-500">
+                        {r.note || "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        {r.hasProof ? (
+                          <a
+                            href={`/api/admin/funds/proof/${r._id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 rounded bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700 hover:bg-sky-100"
+                          >
+                            View ↗
+                          </a>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            r.status === "approved"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : r.status === "rejected"
+                                ? "bg-rose-100 text-rose-800"
+                                : "bg-amber-100 text-amber-800"
+                          }`}
+                        >
+                          {r.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-xs text-slate-500">
+                        {r.createdAt ? new Date(r.createdAt).toLocaleDateString() : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Quick link to orders scoped to this user */}

@@ -13,6 +13,7 @@ type Req = {
   note?: string;
   status: string;
   createdAt?: string;
+  hasProof?: boolean;
 };
 
 export default function AdminFundsPage() {
@@ -88,6 +89,7 @@ export default function AdminFundsPage() {
                 <th className="px-3 py-3">Type</th>
                 <th className="px-3 py-3 text-right">Amount</th>
                 <th className="px-3 py-3">Reference</th>
+                <th className="px-3 py-3">Proof</th>
                 <th className="px-3 py-3">Status</th>
                 <th className="px-3 py-3">Created</th>
                 <th className="px-3 py-3">Actions</th>
@@ -96,13 +98,13 @@ export default function AdminFundsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan={8} className="px-3 py-8 text-center text-slate-500">
                     Loading…
                   </td>
                 </tr>
               ) : requests.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan={8} className="px-3 py-8 text-center text-slate-500">
                     No requests.
                   </td>
                 </tr>
@@ -119,6 +121,20 @@ export default function AdminFundsPage() {
                     </td>
                     <td className="px-3 py-3 max-w-[180px] truncate text-slate-600">
                       {r.reference || "—"}
+                    </td>
+                    <td className="px-3 py-3">
+                      {r.hasProof ? (
+                        <a
+                          href={`/api/admin/funds/proof/${r._id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700 hover:bg-sky-100"
+                        >
+                          View proof ↗
+                        </a>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
                     </td>
                     <td className="px-3 py-3">
                       <span
