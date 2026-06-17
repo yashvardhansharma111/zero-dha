@@ -176,13 +176,15 @@ export async function angelPost(path: string, body: unknown): Promise<any> {
       throw e;
     }
 
-    if (json?.message && isRateLimit(json.message)) {
+    const msg: string = (json as { message?: string })?.message ?? '';
+
+    if (msg && isRateLimit(msg)) {
       tripCircuit();
-      throw new Error(`Angel One rate-limited: ${j.message}`);
+      throw new Error(`Angel One rate-limited: ${msg}`);
     }
 
     // Session token expired → re-login once and retry (no extra enqueue, we're already in the slot)
-    if (json?.message && isTokenExpired(json.message)) {
+    if (msg && isTokenExpired(msg)) {
       setCached(null);
       const h2 = await authHeaders();
       const r2 = await fetch(`${BASE}${path}`, {
