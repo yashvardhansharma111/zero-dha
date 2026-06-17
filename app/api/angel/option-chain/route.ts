@@ -6,6 +6,15 @@ import {
   INDEX_TOKENS,
 } from "@/lib/angelone/instruments";
 
+const QUOTE_CACHE_TTL_MS = 60_000; // 60 s — keep Angel One under rate limit
+declare global {
+  // eslint-disable-next-line no-var
+  var __optionQuoteCache: Map<string, { data: unknown; fetchedAt: number }> | undefined;
+}
+const quoteCache: Map<string, { data: unknown; fetchedAt: number }> =
+  globalThis.__optionQuoteCache ||
+  (globalThis.__optionQuoteCache = new Map());
+
 /**
  * GET /api/angel/option-chain?symbol=NIFTY&expiry=25APR2026
  * GET /api/angel/option-chain?symbol=NIFTY  (returns nearest expiry)
@@ -30,6 +39,15 @@ export async function GET(request: NextRequest) {
       }
       expiry = expiries[0]; // Nearest expiry
     }
+
+    // Full-response cache keyed by symbol+expiry+exchange — avoids hammering Angel One
+    const cacheKey = `${symbol}:${exchange}:${expiry}`;
+    const cached = quoteCache.get(cacheKey);
+    if (cached && Date.now() - cached.fetchedAt < QUOTE_CACHE_TTL_MS) {
+      console.log("[angel/option-chain] cache hit —", cacheKey, `age=${Math.round((Date.now() - cached.fetchedAt) / 1000)}s`);
+      return NextResponse.json(cached.data);
+    }
+    console.log("[angel/option-chain] cache miss —", cacheKey);
 
     // Get all CE/PE instruments for this expiry
     const { calls: allCalls, puts: allPuts } = await getOptionChainInstruments(
@@ -184,15 +202,9 @@ export async function GET(request: NextRequest) {
     // Get all available expiries for the dropdown
     const expiries = await getExpiries(symbol, exchange);
 
-    return NextResponse.json({
-      symbol,
-      expiry,
-      exchange,
-      spotPrice,
-      atmStrike,
-      expiries,
-      chain,
-    });
+    const responseData = { symbol, expiry, exchange, spotPrice, atmStrike, expiries, chain };
+    quoteCache.set(cacheKey, { data: responseData, fetchedAt: Date.now() });
+    return NextResponse.json(responseData);
   } catch (err: any) {
     console.error("[angel/option-chain]", err);
     return NextResponse.json(
