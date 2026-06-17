@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
 
     // Limit to strikes near ATM — huge perf win (200+ strikes → ~40)
     // Use all unique strikes, sorted, pick ~20 on each side of spot
-    const STRIKE_WINDOW = Number(sp.get("strikes")) || 20;
+    const STRIKE_WINDOW = Number(sp.get("strikes")) || 8; // 8 each side = 16 strikes = 32 tokens → 1 batch
     const allStrikes = [...new Set([...allCalls.map((c) => c.strike), ...allPuts.map((p) => p.strike)])].sort(
       (a, b) => a - b,
     );

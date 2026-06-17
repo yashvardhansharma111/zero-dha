@@ -114,8 +114,34 @@ async function parseJson(res: Response) {
   }
 }
 
+// Global throttle — ensures at least 350ms between consecutive Angel One REST calls
+// to stay under their per-second rate limit.
+declare global {
+  // eslint-disable-next-line no-var
+  var __angelLastCallAt: number | undefined;
+}
+async function throttle() {
+  const MIN_GAP_MS = 350;
+  const last = globalThis.__angelLastCallAt ?? 0;
+  const wait = MIN_GAP_MS - (Date.now() - last);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  globalThis.__angelLastCallAt = Date.now();
+}
+
+function isRateLimitError(msg: string) {
+  const lc = msg.toLowerCase();
+  return lc.includes("rate") || lc.includes("exceeding") || lc.includes("too many");
+}
+
+function isTokenError(msg: string) {
+  const lc = msg.toLowerCase();
+  return lc.includes("invalid token") || lc.includes("unauthorized") ||
+    (lc.includes("access denied") && !isRateLimitError(lc));
+}
+
 /** Authenticated POST to SmartAPI. */
 export async function angelPost(path: string, body: unknown) {
+  await throttle();
   const headers = await authHeaders();
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
@@ -125,11 +151,17 @@ export async function angelPost(path: string, body: unknown) {
 
   const json = await parseJson(res);
 
+  // Rate limited — throw immediately, do NOT re-login (that wastes quota further)
+  if (json.message && isRateLimitError(json.message)) {
+    throw new Error(`Angel One rate limited: ${json.message}`);
+  }
+
   // Token expired → clear cache, re-login once, retry
-  if (json.message?.toLowerCase().includes("invalid token") ||
-      json.message?.toLowerCase().includes("access denied")) {
+  if (json.message && isTokenError(json.message)) {
     setCached(null);
+    await throttle();
     const h2 = await authHeaders();
+    await throttle();
     const r2 = await fetch(`${BASE}${path}`, {
       method: "POST",
       headers: h2,
