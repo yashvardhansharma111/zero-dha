@@ -22,12 +22,12 @@ export async function GET(request: NextRequest) {
 
     // Use the same effective config (global + user merge) that drives configRows in the app
     const effectiveConfig = await getEffectiveOrdersConfigForUser(userId);
-    const adminPositions = (effectiveConfig.orders ?? []).filter(
-      (r) => r.segmentKey === "positions" && r.status !== "CLOSED",
+    const allAdminPositions = (effectiveConfig.orders ?? []).filter(
+      (r) => r.segmentKey === "positions",
     );
 
-    if (adminPositions.length > 0) {
-      const positions = adminPositions.map((r) => {
+    if (allAdminPositions.length > 0) {
+      function mapPosition(r: typeof allAdminPositions[number]) {
         const pnl = computeOrderPnl(r);
         const qty = Number(r.qty || 0);
         const avgPrice = Number(r.avgPrice || 0);
@@ -57,21 +57,28 @@ export async function GET(request: NextRequest) {
           strikePrice: r.strikePrice,
           expiry: r.expiryDate || undefined,
         };
-      });
+      }
 
-      const totalInvested = positions.reduce((s, p) => s + p.investedValue, 0);
-      const totalCurrent = positions.reduce((s, p) => s + p.currentValue, 0);
-      const totalPnl = positions.reduce((s, p) => s + p.pnl, 0);
+      // Only show OPEN positions in the list
+      const openPositions = allAdminPositions
+        .filter((r) => r.status !== "CLOSED")
+        .map(mapPosition);
+
+      // But sum P&L across ALL (open + closed) so realized P&L persists after exit
+      const allMapped = allAdminPositions.map(mapPosition);
+      const totalInvested = openPositions.reduce((s, p) => s + p.investedValue, 0);
+      const totalCurrent = openPositions.reduce((s, p) => s + p.currentValue, 0);
+      const totalPnl = allMapped.reduce((s, p) => s + p.pnl, 0);
       const totalPnlPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
 
       return NextResponse.json({
-        positions,
+        positions: openPositions,
         summary: {
           totalInvested,
           totalCurrent,
           totalPnl,
           totalPnlPct,
-          count: positions.length,
+          count: openPositions.length,
         },
       });
     }
