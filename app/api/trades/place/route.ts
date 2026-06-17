@@ -5,22 +5,6 @@ import { getEffectiveOrdersConfigForUser } from "@/lib/effective-orders-config";
 import { upsertScopedConfig } from "@/lib/scoped-config";
 
 
-function isIndianMarketOpen(): { open: boolean; message?: string } {
-  const now = new Date();
-  // IST = UTC+5:30
-  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
-  const ist = new Date(utcMs + 5.5 * 3600 * 1000);
-  const day = ist.getDay(); // 0=Sun, 6=Sat
-  if (day === 0 || day === 6) {
-    return { open: false, message: "Market is closed on weekends. Trading hours: Mon–Fri 9:15 AM – 3:30 PM IST" };
-  }
-  const totalMins = ist.getHours() * 60 + ist.getMinutes();
-  if (totalMins < 555 || totalMins > 930) { // 9:15=555, 15:30=930
-    return { open: false, message: "Market is closed. Trading hours: Mon–Fri 9:15 AM – 3:30 PM IST" };
-  }
-  return { open: true };
-}
-
 /**
  * POST /api/trades/place
  * Body: { symbol, exchange, side, qty, orderType, limitPrice?, productType?, optionType?, strikePrice?, expiry? }
@@ -30,11 +14,6 @@ export async function POST(request: NextRequest) {
     const user = await getUserFromRequest(request);
     if (!user) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
-
-    const marketStatus = isIndianMarketOpen();
-    if (!marketStatus.open) {
-      return NextResponse.json({ message: marketStatus.message }, { status: 403 });
     }
 
     const body = await request.json();
