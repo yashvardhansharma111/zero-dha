@@ -107,7 +107,8 @@ export async function authHeaders(): Promise<Record<string, string>> {
   return { ...COMMON_HEADERS, Authorization: `Bearer ${s.jwtToken}`, "X-PrivateKey": apiKey() };
 }
 
-async function parseJson(res: Response): Promise<unknown> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function parseJson(res: Response): Promise<any> {
   const text = await res.text();
   try {
     return JSON.parse(text);
@@ -148,7 +149,8 @@ async function enqueue<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /** Authenticated POST to SmartAPI — serialized + circuit-broken. */
-export async function angelPost(path: string, body: unknown): Promise<unknown> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function angelPost(path: string, body: unknown): Promise<any> {
   if (circuitOpen()) {
     const remaining = Math.ceil(
       (CIRCUIT_BACKOFF_MS - (Date.now() - (globalThis.__angelRateLimitedAt ?? 0))) / 1000,
@@ -174,15 +176,13 @@ export async function angelPost(path: string, body: unknown): Promise<unknown> {
       throw e;
     }
 
-    const j = json as { message?: string };
-
-    if (j.message && isRateLimit(j.message)) {
+    if (json?.message && isRateLimit(json.message)) {
       tripCircuit();
       throw new Error(`Angel One rate-limited: ${j.message}`);
     }
 
     // Session token expired → re-login once and retry (no extra enqueue, we're already in the slot)
-    if (j.message && isTokenExpired(j.message)) {
+    if (json?.message && isTokenExpired(json.message)) {
       setCached(null);
       const h2 = await authHeaders();
       const r2 = await fetch(`${BASE}${path}`, {
