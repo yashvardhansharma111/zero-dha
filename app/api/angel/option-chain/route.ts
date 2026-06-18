@@ -68,6 +68,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Circuit open with no cache — return skeleton chain (strikes from scrip master, LTP=0)
+    // so the app renders the table instead of an error screen.
+    if (circuitOpen()) {
+      const strikeSet = new Set([...allCalls.map((c) => c.strike), ...allPuts.map((p) => p.strike)]);
+      const allStrikes = [...strikeSet].sort((a, b) => a - b).slice(0, 20);
+      const expiries = await getExpiries(symbol, exchange);
+      const chain = allStrikes.map((strike) => {
+        const ce = allCalls.find((c) => c.strike === strike);
+        const pe = allPuts.find((p) => p.strike === strike);
+        const row: Record<string, unknown> = { strike };
+        const empty = { ltp: 0, change: 0, changePct: 0, oi: 0, oiChange: 0, volume: 0, bidPrice: 0, askPrice: 0, iv: 0, lotSize: ce?.lotsize ?? pe?.lotsize ?? 1 };
+        if (ce) row.CE = { ...empty, symbol: ce.symbol, token: ce.token };
+        if (pe) row.PE = { ...empty, symbol: pe.symbol, token: pe.token };
+        return row;
+      });
+      console.log("[angel/option-chain] circuit open — returning skeleton chain", cacheKey);
+      return NextResponse.json({ symbol, expiry, exchange, spotPrice: 0, atmStrike: 0, expiries, chain });
+    }
+
     // Fetch spot price first (needed to pick ATM strikes)
     let spotPrice = 0;
     const idxInfo = INDEX_TOKENS[symbol];
