@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { angelPost } from "@/lib/angelone/session";
+import { angelPost, circuitOpen } from "@/lib/angelone/session";
 import {
   getOptionChainInstruments,
   getExpiries,
@@ -45,6 +45,11 @@ export async function GET(request: NextRequest) {
     const cached = quoteCache.get(cacheKey);
     if (cached && Date.now() - cached.fetchedAt < QUOTE_CACHE_TTL_MS) {
       console.log("[angel/option-chain] cache hit —", cacheKey, `age=${Math.round((Date.now() - cached.fetchedAt) / 1000)}s`);
+      return NextResponse.json(cached.data);
+    }
+    // Circuit open — serve stale cache rather than error
+    if (circuitOpen() && cached) {
+      console.log("[angel/option-chain] circuit open, serving stale cache —", cacheKey);
       return NextResponse.json(cached.data);
     }
     console.log("[angel/option-chain] cache miss —", cacheKey);

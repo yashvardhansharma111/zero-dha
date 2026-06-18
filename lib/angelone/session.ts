@@ -44,12 +44,12 @@ const CIRCUIT_BACKOFF_MS = 10_000; // ms to block all calls after a rate-limit h
 function getCached(): SessionTokens | null { return globalThis.__angelSession ?? null; }
 function setCached(v: SessionTokens | null) { globalThis.__angelSession = v; }
 
-function circuitOpen(): boolean {
+export function circuitOpen(): boolean {
   return Date.now() - (globalThis.__angelRateLimitedAt ?? 0) < CIRCUIT_BACKOFF_MS;
 }
 function tripCircuit() {
   globalThis.__angelRateLimitedAt = Date.now();
-  console.warn("[Angel One] Rate-limit hit — blocking all calls for 30 s");
+  console.warn("[Angel One] Rate-limit hit — blocking all calls for 10 s");
 }
 
 function isRateLimit(text: string) {

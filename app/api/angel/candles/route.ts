@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { angelPost } from "@/lib/angelone/session";
+import { angelPost, circuitOpen } from "@/lib/angelone/session";
 import { INDEX_TOKENS, resolveTradable } from "@/lib/angelone/instruments";
 
 /**
@@ -84,6 +84,11 @@ export async function GET(request: NextRequest) {
     const cached = candleCache.get(cacheKey);
     if (cached && Date.now() - cached.fetchedAt < cacheTtl) {
       console.log("[angel/candles] cache hit —", cacheKey, `age=${Math.round((Date.now() - cached.fetchedAt) / 1000)}s`);
+      return NextResponse.json(cached.data);
+    }
+    // Circuit open (rate-limited) — serve stale cache rather than 500
+    if (circuitOpen() && cached) {
+      console.log("[angel/candles] circuit open, serving stale cache —", cacheKey);
       return NextResponse.json(cached.data);
     }
 
