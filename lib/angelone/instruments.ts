@@ -117,11 +117,14 @@ export async function resolveTradable(
     for (const i of c.data) {
       if (i.exch_seg !== "MCX") continue;
       if (i.instrumenttype !== "FUTCOM") continue;
-      const nameMatch = i.name.toUpperCase() === upper;
+      const nameUp = i.name.toUpperCase();
+      const nameMatch = nameUp === upper;
       // e.g. "CRUDEOIL25APR2026FUT" → strip trailing digits/expiry → "CRUDEOIL"
       const symBase = i.symbol.replace(/\d.*$/, "").toUpperCase();
       const symMatch = symBase === upper;
-      if (!nameMatch && !symMatch) continue;
+      // Fallback: partial match covers abbreviations / name casing variants
+      const nameContains = nameUp.includes(upper) || upper.includes(nameUp);
+      if (!nameMatch && !symMatch && !nameContains) continue;
       futures.push(i);
     }
     if (futures.length) {

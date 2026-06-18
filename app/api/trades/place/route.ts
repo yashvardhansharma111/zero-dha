@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ObjectId } from "mongodb";
 import { getUserFromRequest } from "@/lib/auth";
 import { placeOrder } from "@/lib/trades";
 import { getEffectiveOrdersConfigForUser } from "@/lib/effective-orders-config";
 import { upsertScopedConfig } from "@/lib/scoped-config";
+import { getDb } from "@/lib/mongodb";
 
 
 /**
@@ -73,6 +75,33 @@ export async function POST(request: NextRequest) {
         });
 
         const exitPrice = Number(adminPos.ltp || adminPos.avgPrice || 0);
+        const avgPrice = Number(adminPos.avgPrice || 0);
+        const exitQty = Number(qty);
+        const pnl = (exitPrice - avgPrice) * exitQty;
+
+        // Save to trades collection so it appears in History tab
+        const db = await getDb();
+        await db.collection("trades").insertOne({
+          userId: new ObjectId(userId),
+          symbol,
+          exchange,
+          side: "SELL",
+          orderType: "MARKET",
+          qty: exitQty,
+          price: exitPrice,
+          status: "EXECUTED",
+          productType: adminPos.productType || "CNC",
+          lotSize: 1,
+          totalValue: exitPrice * exitQty,
+          segmentKey: "history",
+          optionType: adminPos.optionType,
+          strikePrice: adminPos.strikePrice ? Number(adminPos.strikePrice) : undefined,
+          expiry: adminPos.expiryDate || undefined,
+          pnl,
+          createdAt: new Date(),
+          executedAt: new Date(),
+        });
+
         return NextResponse.json({
           message: `SELL ${qty} ${symbol} @ ₹${exitPrice.toFixed(2)}`,
           trade: {
