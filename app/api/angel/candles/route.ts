@@ -9,6 +9,24 @@ import { INDEX_TOKENS, resolveTradable } from "@/lib/angelone/instruments";
  * Supports: ONE_MINUTE, FIVE_MINUTE, FIFTEEN_MINUTE, THIRTY_MINUTE, ONE_HOUR, ONE_DAY
  */
 
+// Cache candle responses to avoid hammering Angel One on every chart view.
+// Intraday (1D) refreshes every 60s; longer ranges (daily candles) refresh every 10min.
+declare global {
+  // eslint-disable-next-line no-var
+  var __candleCache: Map<string, { data: unknown; fetchedAt: number }> | undefined;
+}
+const candleCache: Map<string, { data: unknown; fetchedAt: number }> =
+  globalThis.__candleCache || (globalThis.__candleCache = new Map());
+
+const CANDLE_CACHE_TTL: Record<string, number> = {
+  "1D": 60_000,       // 1 min — intraday, 5-min candles
+  "1W": 300_000,      // 5 min
+  "1M": 600_000,      // 10 min
+  "3M": 600_000,
+  "6M": 600_000,
+  "1Y": 600_000,
+};
+
 const RANGE_MAP: Record<string, { days: number; interval: string }> = {
   "1D": { days: 1, interval: "FIVE_MINUTE" },
   "1W": { days: 7, interval: "FIFTEEN_MINUTE" },
@@ -60,6 +78,15 @@ export async function GET(request: NextRequest) {
     const rangeConfig = RANGE_MAP[range] || RANGE_MAP["1D"];
     const interval = intervalOverride || rangeConfig.interval;
 
+    // Check cache before hitting Angel One
+    const cacheKey = `${resolvedExchange}:${token}:${range}:${interval}`;
+    const cacheTtl = CANDLE_CACHE_TTL[range] ?? 60_000;
+    const cached = candleCache.get(cacheKey);
+    if (cached && Date.now() - cached.fetchedAt < cacheTtl) {
+      console.log("[angel/candles] cache hit —", cacheKey, `age=${Math.round((Date.now() - cached.fetchedAt) / 1000)}s`);
+      return NextResponse.json(cached.data);
+    }
+
     const toDate = new Date();
     const fromDate = new Date(
       toDate.getTime() - rangeConfig.days * 24 * 60 * 60 * 1000,
@@ -105,13 +132,9 @@ export async function GET(request: NextRequest) {
       }),
     );
 
-    return NextResponse.json({
-      symbol: symbolName,
-      exchange,
-      range,
-      interval,
-      candles,
-    });
+    const responseData = { symbol: symbolName, exchange, range, interval, candles };
+    candleCache.set(cacheKey, { data: responseData, fetchedAt: Date.now() });
+    return NextResponse.json(responseData);
   } catch (err: any) {
     console.error("[angel/candles]", err);
     return NextResponse.json(

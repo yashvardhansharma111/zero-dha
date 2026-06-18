@@ -38,8 +38,8 @@ declare global {
 }
 
 const SESSION_TTL_MS = 23 * 60 * 60 * 1000;
-const MIN_GAP_MS = 700;            // ms enforced between consecutive Angel One calls
-const CIRCUIT_BACKOFF_MS = 30_000; // ms to block all calls after a rate-limit hit
+const MIN_GAP_MS = 1_000;          // ms enforced between consecutive Angel One calls
+const CIRCUIT_BACKOFF_MS = 10_000; // ms to block all calls after a rate-limit hit
 
 function getCached(): SessionTokens | null { return globalThis.__angelSession ?? null; }
 function setCached(v: SessionTokens | null) { globalThis.__angelSession = v; }
