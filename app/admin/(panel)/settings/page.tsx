@@ -26,6 +26,37 @@ export default function AdminSettingsPage() {
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // App URL
+  const [appUrl, setAppUrl] = useState("");
+  const [appUrlMsg, setAppUrlMsg] = useState<string | null>(null);
+  const [appUrlErr, setAppUrlErr] = useState<string | null>(null);
+  const [appUrlSaving, setAppUrlSaving] = useState(false);
+
+  const loadAppUrl = useCallback(async () => {
+    try {
+      const data = await adminJson<{ apiUrl: string }>("/api/admin/app-url");
+      setAppUrl(data.apiUrl || "");
+    } catch {}
+  }, []);
+
+  async function saveAppUrl() {
+    setAppUrlSaving(true);
+    setAppUrlMsg(null);
+    setAppUrlErr(null);
+    try {
+      await adminJson("/api/admin/app-url", {
+        method: "POST",
+        body: JSON.stringify({ apiUrl: appUrl }),
+      });
+      setAppUrlMsg("App URL saved. New APK installs will use this URL.");
+      await loadAppUrl();
+    } catch (e) {
+      setAppUrlErr(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setAppUrlSaving(false);
+    }
+  }
+
   const load = useCallback(async () => {
     setErr(null);
     try {
@@ -51,7 +82,8 @@ export default function AdminSettingsPage() {
 
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadAppUrl();
+  }, [load, loadAppUrl]);
 
   async function saveMeta() {
     setSaving(true);
@@ -192,6 +224,42 @@ export default function AdminSettingsPage() {
         className="mt-6 rounded-lg bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
       >
         {saving ? "Saving…" : "Save payment settings"}
+      </button>
+
+      {/* ── App URL ─────────────────────────────────────────── */}
+      <h2 className="mt-12 text-lg font-semibold text-slate-900">App API URL</h2>
+      <p className="mt-1 text-sm text-slate-600">
+        The server URL the mobile app connects to. Leave blank to use the default{" "}
+        <code className="rounded bg-slate-100 px-1 text-xs">https://app.zerodha-pulse.in</code>.
+        The app fetches this on every launch — no APK rebuild needed to change servers.
+      </p>
+      {appUrlMsg && (
+        <p className="mt-4 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-900">{appUrlMsg}</p>
+      )}
+      {appUrlErr && (
+        <p className="mt-4 rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-900">{appUrlErr}</p>
+      )}
+      <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <label className="block">
+          <span className="text-xs font-medium text-slate-500">API base URL</span>
+          <input
+            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            placeholder="https://app.zerodha-pulse.in"
+            value={appUrl}
+            onChange={(e) => setAppUrl(e.target.value)}
+          />
+        </label>
+        <p className="mt-2 text-xs text-slate-400">
+          No trailing slash. Example: <code>https://app.zerodha-pulse.in</code>
+        </p>
+      </section>
+      <button
+        type="button"
+        disabled={appUrlSaving}
+        onClick={() => void saveAppUrl()}
+        className="mt-4 rounded-lg bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+      >
+        {appUrlSaving ? "Saving…" : "Save app URL"}
       </button>
     </div>
   );
